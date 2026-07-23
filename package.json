@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "start": "node serve.js"
+  },
   "dependencies": {
     "openai": "^6.48.0"
   }
