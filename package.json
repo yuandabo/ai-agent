@@ -1,7 +1,7 @@
 {
   "type": "module",
   "scripts": {
-    "start": "node serve.js"
+    "start": "node --env-file=.env serve.js"
   },
   "dependencies": {
     "openai": "^6.48.0"
