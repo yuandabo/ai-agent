@@ -2,9 +2,12 @@
   "type": "module",
   "scripts": {
     "start": "node --env-file=.env serve.js",
-    "test": "node --env-file=.env test-connection.js"
+    "web": "node --env-file=.env web.js",
+    "check": "node --check serve.js && node --check stream.js && node --check web.js && node --check public/app.js",
+    "test": "node --env-file=.env test-connection.js",
+    "stream": "node --env-file=.env stream.js"
   },
   "dependencies": {
-    "openai": "^6.48.0"
+    "undici": "^8.8.0"
   }
 }

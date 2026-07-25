@@ -1,3 +1,8 @@
 node_modules/
 .env
+data/
+workspace/
 .DS_Store
+*.log
+*.out
+*.err

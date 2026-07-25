@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Local Agent</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div><strong>Local Agent</strong><small id="model">加载中</small></div>
+          <button id="new-chat">新对话</button>
+        </div>
+        <div id="conversations" class="conversation-list"></div>
+      </aside>
+      <section class="chat">
+        <header>
+          <div><strong id="title">新对话</strong><small id="conversation-id">本地持久化记忆</small></div>
+          <span class="status"><i></i> 已连接</span>
+        </header>
+        <div id="messages" class="messages">
+          <div class="empty"><span>AI</span><h1>开始测试你的 Agent</h1><p>支持流式回复、本地记忆、工具调用和图片输入。</p></div>
+        </div>
+        <form id="composer">
+          <input id="file-input" type="file" accept="image/*,.txt,.md,.markdown,.json,.csv,.js,.mjs,.cjs,.ts,.tsx,.jsx,.html,.css,.xml,.yaml,.yml" multiple hidden />
+          <div class="composer-main">
+            <div id="attachments" class="attachments" hidden></div>
+            <div class="structured-controls">
+              <label><input id="structured-enabled" type="checkbox" /> 结构化输出</label>
+              <button id="schema-toggle" type="button">配置 Schema</button>
+            </div>
+            <div class="composer-row">
+              <button id="attach" class="icon-button" type="button" title="添加图片或文本文件">+</button>
+              <textarea id="input" rows="1" placeholder="输入消息，Enter 发送，Shift + Enter 换行"></textarea>
+              <button id="send" type="submit">发送</button>
+            </div>
+          </div>
+        </form>
+      </section>
+    </main>
+    <div id="schema-modal" class="modal" hidden>
+      <div class="modal-backdrop" data-schema-close></div>
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="schema-title">
+        <header><strong id="schema-title">配置 JSON Schema</strong><button type="button" data-schema-close aria-label="关闭">×</button></header>
+        <textarea id="schema-input" rows="14" spellcheck="false" aria-label="JSON Schema"></textarea>
+        <small>只有点击“保存 Schema”才会应用修改。</small>
+        <footer><button id="schema-cancel" type="button">取消</button><button id="schema-save" type="button">保存 Schema</button></footer>
+      </section>
+    </div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
