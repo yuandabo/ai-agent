@@ -1,5 +1,29 @@
 # Local AI Agent
 
+## MCP Client
+
+The agent loads optional MCP servers from `mcp.json`. MCP tools are discovered at startup and exposed to the model with names such as `mcp__filesystem__read_text_file`, alongside the built-in tools.
+
+The included configuration starts the official filesystem MCP Server over stdio and restricts it to `workspace/`. Verify the real MCP connection, tool discovery, directory listing, and file reading with:
+
+```powershell
+npm run test:mcp
+```
+
+Set `MCP_CONFIG` to use another configuration file. Streamable HTTP servers use this shape:
+
+```json
+{
+  "servers": {
+    "remote": {
+      "transport": "http",
+      "url": "https://example.com/mcp",
+      "headers": { "Authorization": "Bearer ${MCP_TOKEN}" }
+    }
+  }
+}
+```
+
 一个基于 Node.js 和 OpenAI 兼容 `Chat Completions API` 的本地 AI Agent。项目集成了流式回复、Tool Calling、多模态附件、本地记忆、长上下文管理、RAG 和 JSON Schema 结构化输出，并提供轻量 Web 测试页面。
 
 ## 功能

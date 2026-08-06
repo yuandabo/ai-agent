@@ -3,11 +3,14 @@
   "scripts": {
     "start": "node --env-file=.env serve.js",
     "web": "node --env-file=.env web.js",
-    "check": "node --check serve.js && node --check stream.js && node --check web.js && node --check public/app.js",
+    "check": "node --check serve.js && node --check mcp-client.js && node --check test-mcp.js && node --check stream.js && node --check web.js && node --check public/app.js",
+    "test:mcp": "node --env-file-if-exists=.env test-mcp.js",
     "test": "node --env-file=.env test-connection.js",
     "stream": "node --env-file=.env stream.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/server-filesystem": "^2026.7.10",
     "undici": "^8.8.0"
   }
 }

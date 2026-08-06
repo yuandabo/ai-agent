@@ -6,6 +6,7 @@ import { createInterface } from "node:readline/promises";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { ProxyAgent, setGlobalDispatcher } from "undici";
+import { McpManager } from "./mcp-client.js";
 
 const apiKey = process.env.OPENAI_API_KEY?.trim();
 const baseURL = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
@@ -64,7 +65,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS message_search (
 CREATE INDEX IF NOT EXISTS message_search_conversation ON message_search(conversation_id, message_id)`);
 const ragEnabled = true;
 
-const tools = [
+const localTools = [
   {
     type: "function",
     function: {
@@ -150,6 +151,10 @@ const tools = [
     }
   }
 ];
+
+const mcpManager = new McpManager();
+const mcpTools = await mcpManager.connect();
+const tools = [...localTools, ...mcpTools];
 
 function now() {
   return new Date().toISOString();
@@ -327,6 +332,7 @@ async function executeTool(name, rawArguments) {
   let args;
   try {
     args = JSON.parse(rawArguments || "{}");
+    if (mcpManager.ownsTool(name)) return await mcpManager.callTool(name, args);
     if (name === "read_file") {
       const content = await readFile(resolveWorkspacePath(args.path), "utf8");
       if (Buffer.byteLength(content) > maxFileBytes) throw new Error("文件超过 1 MB");
@@ -409,11 +415,21 @@ async function streamChat(messages, onText, options = {}) {
   });
   if (!response.ok) throw new Error(apiErrorMessage(response, await response.text()));
 
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.toLowerCase().includes("text/event-stream")) {
+    const text = await response.text();
+    if (contentType.toLowerCase().includes("text/html") || text.trim().startsWith("<")) {
+      throw new Error("中转站返回了 HTML 页面，而不是模型流。请检查 OPENAI_BASE_URL 是否包含正确的 /v1 路径。");
+    }
+    throw new Error(`中转站未返回 SSE 流（Content-Type: ${contentType || "未知"}）`);
+  }
+
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   const toolCalls = [];
   let content = "";
   let buffer = "";
+  let eventCount = 0;
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -426,7 +442,12 @@ async function streamChat(messages, onText, options = {}) {
       const payload = raw.slice(5).trim();
       if (!payload || payload === "[DONE]") continue;
       let delta;
-      try { delta = JSON.parse(payload).choices?.[0]?.delta; } catch { continue; }
+      try {
+        delta = JSON.parse(payload).choices?.[0]?.delta;
+        eventCount += 1;
+      } catch {
+        continue;
+      }
       if (!delta) continue;
       if (delta.content) {
         content += delta.content;
@@ -441,6 +462,7 @@ async function streamChat(messages, onText, options = {}) {
       }
     }
   }
+  if (!eventCount) throw new Error("中转站返回了空的 SSE 流，没有模型事件");
   return { role: "assistant", content: content || null, tool_calls: toolCalls.length ? toolCalls : undefined };
 }
 
@@ -632,9 +654,10 @@ async function runCli() {
     }
   }
   db.close();
+  await mcpManager.close();
 }
 
 const isCli = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isCli) await runCli();
 
-export { createConversation, deleteConversation, getConversation, getMessages, listConversations, model, runTurn, runTurnStream };
+export { createConversation, deleteConversation, getConversation, getMessages, listConversations, mcpTools, model, runTurn, runTurnStream };
