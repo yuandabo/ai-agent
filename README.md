@@ -24,17 +24,30 @@ Set `MCP_CONFIG` to use another configuration file. Streamable HTTP servers use 
 }
 ```
 
+For bearer-token authentication without storing secrets in `mcp.json`, use `envFile` and `bearerTokenEnvVar`:
+
+```json
+{
+  "transport": "http",
+  "url": "http://127.0.0.1:3100/mcp",
+  "envFile": "../mcp/.env",
+  "bearerTokenEnvVar": "SIMPLE_MCP_API_KEY"
+}
+```
+
 一个基于 Node.js 和 OpenAI 兼容 `Chat Completions API` 的本地 AI Agent。项目集成了流式回复、Tool Calling、多模态附件、本地记忆、长上下文管理、RAG 和 JSON Schema 结构化输出，并提供轻量 Web 测试页面。
 
 ## 功能
 
 - 流式回复：解析上游 SSE，并通过 NDJSON 实时推送到浏览器。
 - Tool Calling：支持读取、写入、搜索和管理 `workspace/` 内的文件。
+- MCP Client：支持 stdio 与 Streamable HTTP，启动时自动发现并注册远程工具。
 - 多模态输入：支持图片以及常见纯文本附件。
 - 本地记忆：使用 SQLite 保存会话、消息、摘要和工具调用记录。
 - 长上下文管理：组合滑动窗口、增量摘要和历史消息 RAG。
 - 结构化输出：可配置 JSON Schema，要求模型返回可解析 JSON。
 - 会话管理：浏览历史会话，并完整删除关联消息、工具记录和检索索引。
+- 斜杠指令：在输入框输入 `/`，通过键盘或鼠标执行本地快捷操作和 MCP 状态查询。
 
 ## 环境要求
 
@@ -68,6 +81,21 @@ npm run web
 ```powershell
 npm start -- "你好"
 ```
+
+## 斜杠指令
+
+在聊天输入框输入 `/` 会打开指令菜单。菜单支持继续输入过滤、上下方向键选择、`Enter` 执行、`Esc` 关闭以及鼠标点击。
+
+| 指令 | 用途 |
+| --- | --- |
+| `/mcp` | 查看所有 MCP Server 的连接状态、传输方式和工具数量 |
+| `/tools` | 查看当前可用的 MCP 工具列表 |
+| `/new` | 新建对话 |
+| `/clear` | 清空当前输入 |
+| `/schema` | 打开 JSON Schema 配置 |
+| `/help` | 显示全部斜杠指令 |
+
+`/mcp` 和 `/tools` 通过 `GET /api/mcp/status` 获取实时状态，其余指令在浏览器本地执行，不会作为聊天消息发送给模型。状态接口不会返回 MCP 密钥或请求头。
 
 ## 配置
 
@@ -125,6 +153,7 @@ Agent 目前提供以下工具：
 ```powershell
 npm run check       # JavaScript 语法检查
 npm test            # 测试 API 连接
+npm run test:mcp    # 验证官方 filesystem MCP Server
 npm run web         # 启动 Web 页面
 npm start -- "问题" # 使用 CLI Agent
 ```

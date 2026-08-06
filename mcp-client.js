@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { parseEnv } from "node:util";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -10,13 +11,13 @@ function safeName(value) {
   return String(value).replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-function expandEnv(value) {
+function expandEnv(value, environment = process.env) {
   if (typeof value === "string") {
-    return value.replace(/\$\{([A-Z0-9_]+)\}/gi, (_, name) => process.env[name] || "");
+    return value.replace(/\$\{([A-Z0-9_]+)\}/gi, (_, name) => environment[name] || "");
   }
-  if (Array.isArray(value)) return value.map(expandEnv);
+  if (Array.isArray(value)) return value.map((item) => expandEnv(item, environment));
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, expandEnv(item)]));
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, expandEnv(item, environment)]));
   }
   return value;
 }
@@ -38,6 +39,7 @@ export class McpManager {
     this.connections = new Map();
     this.toolRoutes = new Map();
     this.tools = [];
+    this.serverStatuses = new Map();
   }
 
   async connect() {
@@ -50,10 +52,33 @@ export class McpManager {
     }
 
     for (const [serverName, rawConfig] of Object.entries(config.servers || {})) {
-      if (rawConfig?.enabled === false) continue;
+      if (rawConfig?.enabled === false) {
+        this.serverStatuses.set(serverName, { name: serverName, status: "disabled", transport: rawConfig.transport || "stdio", toolCount: 0, tools: [] });
+        continue;
+      }
+      this.serverStatuses.set(serverName, { name: serverName, status: "connecting", transport: rawConfig.transport || "stdio", toolCount: 0, tools: [] });
       try {
-        await this.connectServer(serverName, expandEnv(rawConfig));
+        const environment = { ...process.env };
+        if (rawConfig.envFile) {
+          const envPath = resolve(dirname(this.configPath), rawConfig.envFile);
+          Object.assign(environment, parseEnv(await readFile(envPath, "utf8")));
+        }
+        const serverConfig = expandEnv(rawConfig, environment);
+        if (serverConfig.bearerTokenEnvVar) {
+          const token = environment[serverConfig.bearerTokenEnvVar];
+          if (!token) throw new Error(`Missing bearer token environment variable: ${serverConfig.bearerTokenEnvVar}`);
+          serverConfig.headers = { ...serverConfig.headers, Authorization: `Bearer ${token}` };
+        }
+        await this.connectServer(serverName, serverConfig);
       } catch (error) {
+        this.serverStatuses.set(serverName, {
+          name: serverName,
+          status: "error",
+          transport: rawConfig.transport || "stdio",
+          toolCount: 0,
+          tools: [],
+          error: error.message
+        });
         console.error(`[MCP] ${serverName} connection failed: ${error.message}`);
       }
     }
@@ -87,7 +112,18 @@ export class McpManager {
       this.tools.push(exposed);
       this.toolRoutes.set(exposed.function.name, { serverName, toolName: tool.name });
     }
+    this.serverStatuses.set(serverName, {
+      name: serverName,
+      status: "connected",
+      transport: config.transport || "stdio",
+      toolCount: result.tools.length,
+      tools: result.tools.map((tool) => tool.name)
+    });
     console.log(`[MCP] ${serverName} connected (${result.tools.length} tools)`);
+  }
+
+  getStatus() {
+    return [...this.serverStatuses.values()].map((status) => ({ ...status, tools: [...status.tools] }));
   }
 
   ownsTool(name) {

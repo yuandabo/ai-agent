@@ -13,6 +13,7 @@ const schemaToggle = document.querySelector("#schema-toggle");
 const schemaModal = document.querySelector("#schema-modal");
 const schemaInput = document.querySelector("#schema-input");
 const schemaSave = document.querySelector("#schema-save");
+const commandMenu = document.querySelector("#command-menu");
 
 let conversationId = localStorage.getItem("conversationId");
 let attachments = [];
@@ -31,6 +32,17 @@ const defaultSchema = {
 };
 let savedSchema = localStorage.getItem("structuredSchema") || JSON.stringify(defaultSchema, null, 2);
 structuredEnabled.checked = localStorage.getItem("structuredEnabled") === "true";
+let activeCommandIndex = 0;
+let visibleCommands = [];
+
+const commands = [
+  { name: "/mcp", description: "查看 MCP Server 连接状态" },
+  { name: "/tools", description: "查看 MCP 提供的工具" },
+  { name: "/new", description: "新建对话" },
+  { name: "/clear", description: "清空当前输入" },
+  { name: "/schema", description: "配置结构化输出 Schema" },
+  { name: "/help", description: "查看所有斜杠指令" }
+];
 
 function escapeHtml(value) {
   const element = document.createElement("div");
@@ -111,6 +123,83 @@ function addError(message) {
   notice.textContent = `请求失败：${message}`;
   messages.append(notice);
   messages.scrollTop = messages.scrollHeight;
+}
+
+function closeCommandMenu() {
+  commandMenu.hidden = true;
+  commandMenu.innerHTML = "";
+  visibleCommands = [];
+  activeCommandIndex = 0;
+}
+
+function renderCommandMenu() {
+  const value = input.value.trimStart();
+  if (!value.startsWith("/") || /\s/.test(value)) {
+    closeCommandMenu();
+    return;
+  }
+  const query = value.toLowerCase();
+  visibleCommands = commands.filter((command) => command.name.startsWith(query));
+  if (!visibleCommands.length) {
+    closeCommandMenu();
+    return;
+  }
+  activeCommandIndex = Math.min(activeCommandIndex, visibleCommands.length - 1);
+  commandMenu.innerHTML = visibleCommands.map((command, index) => `
+    <button type="button" class="command-option ${index === activeCommandIndex ? "active" : ""}" data-command="${command.name}" role="option" aria-selected="${index === activeCommandIndex}">
+      <code>${command.name}</code><span>${command.description}</span>
+    </button>`).join("");
+  commandMenu.hidden = false;
+  commandMenu.querySelector(".active")?.scrollIntoView({ block: "nearest" });
+}
+
+function openSchemaModal() {
+  schemaInput.value = savedSchema;
+  schemaModal.hidden = false;
+  schemaInput.focus();
+}
+
+async function fetchMcpStatus() {
+  const response = await fetch("/api/mcp/status");
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "无法读取 MCP 状态");
+  return data;
+}
+
+async function executeCommand(name) {
+  closeCommandMenu();
+  input.value = "";
+  if (name === "/new") {
+    newChat();
+    return;
+  }
+  if (name === "/clear") {
+    input.focus();
+    return;
+  }
+  if (name === "/schema") {
+    openSchemaModal();
+    return;
+  }
+  if (name === "/help") {
+    addMessage("assistant", commands.map((command) => `${command.name}  ${command.description}`).join("\n"));
+    return;
+  }
+  try {
+    const data = await fetchMcpStatus();
+    if (name === "/mcp") {
+      const lines = data.servers.map((server) => {
+        const detail = server.status === "connected" ? `${server.toolCount} 个工具` : (server.error || server.status);
+        return `${server.status === "connected" ? "已连接" : "未连接"}  ${server.name} (${server.transport}) - ${detail}`;
+      });
+      addMessage("assistant", `MCP：${data.connected}/${data.servers.length} 个 Server 已连接，共 ${data.totalTools} 个工具\n\n${lines.join("\n")}`);
+    } else if (name === "/tools") {
+      const lines = data.servers.flatMap((server) => server.tools.map((tool) => `${server.name} / ${tool}`));
+      addMessage("assistant", lines.length ? `可用 MCP 工具（${lines.length}）\n\n${lines.join("\n")}` : "当前没有可用的 MCP 工具");
+    }
+  } catch (error) {
+    addError(error.message || "指令执行失败");
+  }
 }
 
 function renderAttachments() {
@@ -231,6 +320,11 @@ form.addEventListener("submit", async (event) => {
   const message = input.value.trim();
   if ((!message && !attachments.length) || send.disabled) return;
 
+  if (!attachments.length && commands.some((command) => command.name === message)) {
+    await executeCommand(message);
+    return;
+  }
+
   const outgoingAttachments = attachments;
   let structuredOutput = null;
   if (structuredEnabled.checked) {
@@ -320,11 +414,7 @@ structuredEnabled.addEventListener("change", () => {
   localStorage.setItem("structuredEnabled", String(structuredEnabled.checked));
 });
 
-schemaToggle.addEventListener("click", () => {
-  schemaInput.value = savedSchema;
-  schemaModal.hidden = false;
-  schemaInput.focus();
-});
+schemaToggle.addEventListener("click", openSchemaModal);
 
 function closeSchemaModal() {
   schemaModal.hidden = true;
@@ -376,10 +466,45 @@ attachmentsView.addEventListener("click", (event) => {
 });
 
 input.addEventListener("keydown", (event) => {
+  if (!commandMenu.hidden) {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      activeCommandIndex = (activeCommandIndex + direction + visibleCommands.length) % visibleCommands.length;
+      renderCommandMenu();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeCommandMenu();
+      return;
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      executeCommand(visibleCommands[activeCommandIndex].name);
+      return;
+    }
+  }
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
     form.requestSubmit();
   }
+});
+
+input.addEventListener("input", () => {
+  activeCommandIndex = 0;
+  renderCommandMenu();
+});
+
+commandMenu.addEventListener("mousedown", (event) => {
+  const option = event.target.closest("[data-command]");
+  if (!option) return;
+  event.preventDefault();
+  executeCommand(option.dataset.command);
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!event.target.closest("#composer")) closeCommandMenu();
 });
 
 list.addEventListener("click", (event) => {

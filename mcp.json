@@ -7,6 +7,12 @@
         "node_modules/@modelcontextprotocol/server-filesystem/dist/index.js",
         "workspace"
       ]
+    },
+    "simple-toolbox": {
+      "transport": "http",
+      "url": "http://127.0.0.1:3100/mcp",
+      "envFile": "../mcp/.env",
+      "bearerTokenEnvVar": "SIMPLE_MCP_API_KEY"
     }
   }
 }

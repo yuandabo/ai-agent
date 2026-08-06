@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createConversation, deleteConversation, getConversation, getMessages, listConversations, model, runTurnStream } from "./serve.js";
+import { createConversation, deleteConversation, getConversation, getMcpStatus, getMessages, listConversations, model, runTurnStream } from "./serve.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const publicDir = join(root, "public");
@@ -48,6 +48,16 @@ function normalizeStructuredOutput(value) {
 }
 
 async function api(req, res, url) {
+  if (req.method === "GET" && url.pathname === "/api/mcp/status") {
+    const servers = getMcpStatus();
+    json(res, 200, {
+      servers,
+      connected: servers.filter((server) => server.status === "connected").length,
+      totalTools: servers.reduce((count, server) => count + server.toolCount, 0)
+    });
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/conversations") {
     json(res, 200, { conversations: listConversations(), model });
     return true;

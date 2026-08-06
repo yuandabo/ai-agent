@@ -156,6 +156,10 @@ const mcpManager = new McpManager();
 const mcpTools = await mcpManager.connect();
 const tools = [...localTools, ...mcpTools];
 
+function getMcpStatus() {
+  return mcpManager.getStatus();
+}
+
 function now() {
   return new Date().toISOString();
 }
@@ -660,4 +664,4 @@ async function runCli() {
 const isCli = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isCli) await runCli();
 
-export { createConversation, deleteConversation, getConversation, getMessages, listConversations, mcpTools, model, runTurn, runTurnStream };
+export { createConversation, deleteConversation, getConversation, getMcpStatus, getMessages, listConversations, mcpTools, model, runTurn, runTurnStream };
